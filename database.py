@@ -1,47 +1,106 @@
 import sqlite3
 import hashlib
-import datetime
 
 
 def init_db():
     conn = sqlite3.connect('chat.db')
     cursor = conn.cursor()
-
-    # Tabela użytkowników
-
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT NOT NULL,
-        password_hash TEXT NOT NULL)
-    ''')
-
-    # NOWOŚĆ: Tabela wiadomości
-
+                   CREATE TABLE IF NOT EXISTS users
+                   (
+                       id
+                       INTEGER
+                       PRIMARY
+                       KEY
+                       AUTOINCREMENT,
+                       username
+                       TEXT
+                       UNIQUE
+                       NOT
+                       NULL,
+                       password_hash
+                       TEXT
+                       NOT
+                       NULL
+                   )
+                   ''')
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        sender TEXT NOT NULL,
-        recipient TEXT NOT NULL,
-        content TEXT NOT NULL,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)
-        ''')
-
-    # Grupy
-
+                   CREATE TABLE IF NOT EXISTS messages
+                   (
+                       id
+                       INTEGER
+                       PRIMARY
+                       KEY
+                       AUTOINCREMENT,
+                       sender
+                       TEXT
+                       NOT
+                       NULL,
+                       recipient
+                       TEXT
+                       NOT
+                       NULL,
+                       content
+                       TEXT
+                       NOT
+                       NULL,
+                       timestamp
+                       DATETIME
+                       DEFAULT
+                       CURRENT_TIMESTAMP
+                   )
+                   ''')
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS groups (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL)
-    ''')
-
+                   CREATE TABLE IF NOT EXISTS groups
+                   (
+                       id
+                       INTEGER
+                       PRIMARY
+                       KEY
+                       AUTOINCREMENT,
+                       name
+                       TEXT
+                       UNIQUE
+                       NOT
+                       NULL
+                   )
+                   ''')
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS group_members (
-        group_name TEXT NOT NULL,
-        username TEXT NOT NULL)
-    ''')
-
-
+                   CREATE TABLE IF NOT EXISTS group_members
+                   (
+                       group_name
+                       TEXT
+                       NOT
+                       NULL,
+                       username
+                       TEXT
+                       NOT
+                       NULL
+                   )
+                   ''')
+    cursor.execute('''
+                   CREATE TABLE IF NOT EXISTS group_requests
+                   (
+                       group_name
+                       TEXT
+                       NOT
+                       NULL,
+                       username
+                       TEXT
+                       NOT
+                       NULL,
+                       request_type
+                       TEXT
+                       NOT
+                       NULL,
+                       UNIQUE
+                   (
+                       group_name,
+                       username,
+                       request_type
+                   )
+                       )
+                   ''')
     conn.commit()
     conn.close()
 
@@ -74,10 +133,16 @@ def verify_user(username, password):
     return user is not None
 
 
-# --- NOWE FUNKCJE DO HISTORII CZATU ---
+def get_all_users():
+    conn = sqlite3.connect('chat.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT username FROM users ORDER BY username ASC')
+    rows = cursor.fetchall()
+    conn.close()
+    return [row[0] for row in rows]
+
 
 def save_message(sender, recipient, content):
-    """Zapisuje pojedynczą wiadomość do bazy."""
     conn = sqlite3.connect('chat.db')
     cursor = conn.cursor()
     cursor.execute('INSERT INTO messages (sender, recipient, content) VALUES (?, ?, ?)', (sender, recipient, content))
@@ -88,29 +153,38 @@ def save_message(sender, recipient, content):
 def get_global_history(limit=50):
     conn = sqlite3.connect('chat.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT sender, content, strftime("%H:%M", timestamp, "localtime") FROM messages WHERE recipient = "Globalny" ORDER BY id DESC LIMIT ?', (limit,))
+    cursor.execute(
+        'SELECT sender, content, strftime("%H:%M", timestamp, "localtime") FROM messages WHERE recipient = "Globalny" ORDER BY id DESC LIMIT ?',
+        (limit,))
     rows = cursor.fetchall()
     conn.close()
     return [{"sender": row[0], "content": row[1], "timestamp": row[2]} for row in reversed(rows)]
 
+
 def get_private_history(username, limit=100):
     conn = sqlite3.connect('chat.db')
     cursor = conn.cursor()
-    # Zabezpieczamy się, by nie pobierać historii grup (które zaczynają się od #)
     cursor.execute('''
-        SELECT sender, recipient, content, strftime("%H:%M", timestamp, "localtime") 
-        FROM messages 
-        WHERE recipient != "Globalny" AND recipient NOT LIKE "#%" AND (sender = ? OR recipient = ?) 
-        ORDER BY id DESC LIMIT ?
-    ''', (username, username, limit))
+                   SELECT sender, recipient, content, strftime("%H:%M", timestamp, "localtime")
+                   FROM messages
+                   WHERE recipient != "Globalny" AND recipient NOT LIKE "#%" AND (sender = ? OR recipient = ?)
+                   ORDER BY id DESC LIMIT ?
+                   ''', (username, username, limit))
     rows = cursor.fetchall()
     conn.close()
     return [{"sender": row[0], "recipient": row[1], "content": row[2], "timestamp": row[3]} for row in reversed(rows)]
 
-# --- NOWE FUNKCJE DO OBSŁUGI GRUP ---
+
 def create_group(name, creator):
     conn = sqlite3.connect('chat.db')
     cursor = conn.cursor()
+
+    # NOWOŚĆ: Sprawdzamy czy taka nazwa już istnieje w bazie (ignorując wielkość liter - LOWER)
+    cursor.execute('SELECT name FROM groups WHERE LOWER(name) = LOWER(?)', (name,))
+    if cursor.fetchone():
+        conn.close()
+        return False  # Grupa już istnieje (nawet jeśli ktoś wpisał ją z innej wielkości liter)
+
     try:
         cursor.execute('INSERT INTO groups (name) VALUES (?)', (name,))
         cursor.execute('INSERT INTO group_members (group_name, username) VALUES (?, ?)', (name, creator))
@@ -168,3 +242,80 @@ def get_group_history(group_name, limit=50):
     rows = cursor.fetchall()
     conn.close()
     return [{"sender": row[0], "group": group_name, "content": row[1], "timestamp": row[2]} for row in reversed(rows)]
+
+
+def leave_group(name, username):
+    conn = sqlite3.connect('chat.db')
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM group_members WHERE group_name = ? AND username = ?', (name, username))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_group_creator(group_name):
+    conn = sqlite3.connect('chat.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT username FROM group_members WHERE group_name = ? ORDER BY rowid ASC LIMIT 1', (group_name,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def delete_group(group_name, current_user):
+    creator = get_group_creator(group_name)
+    if creator != current_user:
+        return False
+    conn = sqlite3.connect('chat.db')
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM groups WHERE name = ?', (group_name,))
+    cursor.execute('DELETE FROM group_members WHERE group_name = ?', (group_name,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def add_group_request(group_name, username, req_type):
+    conn = sqlite3.connect('chat.db')
+    cursor = conn.cursor()
+    try:
+        cursor.execute('INSERT INTO group_requests (group_name, username, request_type) VALUES (?, ?, ?)',
+                       (group_name, username, req_type))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        pass
+    conn.close()
+
+
+def remove_group_request(group_name, username, req_type):
+    conn = sqlite3.connect('chat.db')
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM group_requests WHERE group_name = ? AND username = ? AND request_type = ?',
+                   (group_name, username, req_type))
+    conn.commit()
+    conn.close()
+
+
+def get_user_invites(username):
+    conn = sqlite3.connect('chat.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT group_name FROM group_requests WHERE username = ? AND request_type = "invite"', (username,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [r[0] for r in rows]
+
+
+def get_creator_join_requests(creator_username):
+    conn = sqlite3.connect('chat.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT group_name, username FROM group_requests WHERE request_type = "join"')
+    rows = cursor.fetchall()
+    conn.close()
+    res = []
+    for r in rows:
+        if get_group_creator(r[0]) == creator_username:
+            res.append({"group": r[0], "user": r[1]})
+    return res
+
+
+init_db()
