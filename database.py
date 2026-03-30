@@ -37,8 +37,12 @@ def init_db():
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
                 username      TEXT    UNIQUE NOT NULL,
                 password_hash TEXT    NOT NULL,
-                hash_type     TEXT    NOT NULL DEFAULT 'bcrypt'
+                hash_type     TEXT    NOT NULL DEFAULT 'bcrypt',
+                public_key    TEXT    DEFAULT NULL
             );
+
+            CREATE INDEX IF NOT EXISTS idx_users_username
+                ON users (username);
 
             CREATE TABLE IF NOT EXISTS messages (
                 id        INTEGER  PRIMARY KEY AUTOINCREMENT,
@@ -84,6 +88,13 @@ def init_db():
             conn.commit()
         except sqlite3.OperationalError:
             pass  # Kolumna już istnieje — wszystko OK
+
+        # Migracja: kolumna public_key dla E2EE
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN public_key TEXT DEFAULT NULL")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -221,6 +232,25 @@ def get_all_users() -> list[str]:
             'SELECT username FROM users ORDER BY username ASC'
         ).fetchall()
     return [r['username'] for r in rows]
+
+
+def store_public_key(username: str, public_key_pem: str):
+    """Zapisuje klucz publiczny RSA użytkownika (PEM jako tekst)."""
+    with get_conn() as conn:
+        conn.execute(
+            'UPDATE users SET public_key = ? WHERE username = ?',
+            (public_key_pem, username)
+        )
+        conn.commit()
+
+
+def get_public_key(username: str) -> str | None:
+    """Zwraca klucz publiczny RSA użytkownika lub None jeśli brak."""
+    with get_conn() as conn:
+        row = conn.execute(
+            'SELECT public_key FROM users WHERE username = ?', (username,)
+        ).fetchone()
+    return row['public_key'] if row else None
 
 
 # ---------------------------------------------------------------------------

@@ -500,26 +500,56 @@ def handle_delete_group(conn, current_user, msg):
                 send_to(snapshot[m], {"action": "your_groups", "groups": database.get_user_groups(m)})
 
 
+def handle_upload_public_key(conn, current_user, msg):
+    """Klient wysyła swój klucz publiczny RSA po zalogowaniu."""
+    if not current_user:
+        return
+    pem = msg.get("public_key", "")
+    if not pem or not pem.strip().startswith("-----BEGIN PUBLIC KEY-----"):
+        send_to(conn, {"status": "error", "message": "Nieprawidłowy klucz publiczny."})
+        return
+    if len(pem) > 4096:
+        send_to(conn, {"status": "error", "message": "Klucz publiczny za długi."})
+        return
+    database.store_public_key(current_user, pem)
+    send_to(conn, {"status": "success", "message": "Klucz publiczny zapisany."})
+    log_message(f"[E2EE] Klucz publiczny zaktualizowany: {current_user}")
+
+
+def handle_get_public_key(conn, current_user, msg):
+    """Klient pyta o klucz publiczny innego użytkownika, żeby zaszyfrować mu wiadomość."""
+    if not current_user:
+        return
+    target = msg.get("username", "")
+    pem = database.get_public_key(target)
+    if pem:
+        send_to(conn, {"action": "public_key_response", "username": target, "public_key": pem})
+    else:
+        send_to(conn, {"action": "public_key_response", "username": target, "public_key": None})
+
+
 # ---------------------------------------------------------------------------
 # Mapa akcji → handler
 # ---------------------------------------------------------------------------
 
 ACTION_HANDLERS = {
-    'typing':           handle_typing,
+    'typing':            handle_typing,
     'broadcast_message': handle_broadcast_message,
-    'private_message':  handle_private_message,
-    'group_message':    handle_group_message,
-    'send_file':        handle_send_file,
-    'download_request': handle_download_request,
-    'create_group':     handle_create_group,
-    'join_group':       handle_join_group,
+    'private_message':   handle_private_message,
+    'group_message':     handle_group_message,
+    'send_file':         handle_send_file,
+    'download_request':  handle_download_request,
+    'create_group':      handle_create_group,
+    'join_group':        handle_join_group,
     'add_user_to_group': handle_add_user_to_group,
-    'resolve_join':     handle_resolve_join,
-    'resolve_invite':   handle_resolve_invite,
-    'leave_group':      handle_leave_group,
-    'kick_user':        handle_kick_user,
-    'get_group_info':   handle_get_group_info,
-    'delete_group':     handle_delete_group,
+    'resolve_join':      handle_resolve_join,
+    'resolve_invite':    handle_resolve_invite,
+    'leave_group':       handle_leave_group,
+    'kick_user':         handle_kick_user,
+    'get_group_info':    handle_get_group_info,
+    'delete_group':      handle_delete_group,
+    'upload_public_key': handle_upload_public_key,
+    'get_public_key':    handle_get_public_key,
 }
 
 
