@@ -100,7 +100,11 @@ def init_db():
                        request_type
                    )
                        )
-                   ''')
+                    ''')
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN public_key TEXT DEFAULT NULL')
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
@@ -140,6 +144,23 @@ def get_all_users():
     rows = cursor.fetchall()
     conn.close()
     return [row[0] for row in rows]
+
+
+def get_all_users_with_keys():
+    conn = sqlite3.connect('chat.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT username, public_key FROM users WHERE public_key IS NOT NULL')
+    rows = cursor.fetchall()
+    conn.close()
+    return {row[0]: row[1] for row in rows}
+
+
+def update_user_public_key(username, public_key_pem):
+    conn = sqlite3.connect('chat.db')
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET public_key = ? WHERE username = ?', (public_key_pem, username))
+    conn.commit()
+    conn.close()
 
 
 def save_message(sender, recipient, content):
