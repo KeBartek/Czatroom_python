@@ -17,11 +17,10 @@ class NetworkManager:
         self.client_socket = None
         self.socket_file = None
 
-        # Funkcje z GUI, które wywołamy, gdy przyjdzie pakiet
         self.on_message = on_message_callback
         self.on_disconnect = on_disconnect_callback
 
-        # Klucze do szyfrowania End-to-End (E2EE)
+        # Klucze asymetryczne(E2EE)
         self.private_key = None
         self.public_key_pem = None
 
@@ -38,52 +37,47 @@ class NetworkManager:
         if self.client_socket:
             try:
                 self.client_socket.close()
-            except:
+            except Exception:
                 pass
         self.client_socket = None
 
     def encrypt(self, text):
-        """Szyfruje tekst przed wysłaniem w sieć."""
         return self.cipher.encrypt(text.encode('utf-8')).decode('utf-8')
 
     def decrypt(self, enc_text):
-        """Odszyfrowuje tekst z sieci."""
         try:
             return self.cipher.decrypt(enc_text.encode('utf-8')).decode('utf-8')
-        except:
+        except Exception:
             return "🔒 [Nieczytelna wiadomość]"
 
     def send(self, data_dict):
-        """Wysyła słownik JSON do serwera."""
         if not self.client_socket:
             return False
         try:
             self.client_socket.sendall((json.dumps(data_dict) + "\n").encode('utf-8'))
             return True
-        except:
+        except Exception:
             return False
 
     def auth_request(self, action, username, password):
-        """Zarządza logowaniem i rejestracją blokując wątek aż do odpowiedzi."""
         req = {"action": action, "username": username, "password": password}
         if self.send(req):
             try:
                 response_line = self.socket_file.readline()
                 if response_line:
                     return json.loads(response_line)
-            except:
+            except Exception:
                 pass
         return {"status": "error", "message": "Brak połączenia z serwerem."}
 
     def start_listening(self):
-        """Odpala nasłuchiwanie w tle."""
         threading.Thread(target=self._listen_loop, daemon=True).start()
 
     def _listen_loop(self):
-        """Pętla parsująca paczki JSON i rzucająca je do GUI."""
         try:
             for line in self.socket_file:
-                if not line.strip(): continue
+                if not line.strip():
+                    continue
                 message = json.loads(line)
                 self.on_message(message)
         except Exception as e:
@@ -93,7 +87,6 @@ class NetworkManager:
             self.on_disconnect()
 
     def load_or_generate_keys(self, username):
-        """Wczytuje klucze E2EE użytkownika z pliku lub generuje nowe."""
         os.makedirs("keys", exist_ok=True)
         filepath = os.path.join("keys", f"{username}_private.pem")
         try:
@@ -108,8 +101,7 @@ class NetworkManager:
                         format=serialization.PrivateFormat.TraditionalOpenSSL,
                         encryption_algorithm=serialization.NoEncryption()
                     ))
-            
-            # Pobranie klucza publicznego w formacie PEM
+
             pub = self.private_key.public_key()
             self.public_key_pem = pub.public_bytes(
                 encoding=serialization.Encoding.PEM,
@@ -117,11 +109,10 @@ class NetworkManager:
             ).decode('utf-8')
             return True
         except Exception as e:
-            print(f"Błąd kluczy E2EE dla {username}: {e}")
+            print(f"Błąd ładowania kluczy E2EE dla {username}: {e}")
             return False
 
     def get_shared_key(self, recipient_pubkey_pem):
-        """Wylicza klucz symetryczny za pomocą ECDH i HKDF na bazie klucza odbiorcy."""
         if not self.private_key or not recipient_pubkey_pem:
             return None
         try:
@@ -135,11 +126,10 @@ class NetworkManager:
             ).derive(shared_secret)
             return base64.urlsafe_b64encode(derived_key)
         except Exception as e:
-            print(f"Błąd ECDH: {e}")
+            print(f"Błąd uzgadniania klucza ECDH: {e}")
             return None
 
     def encrypt_e2ee(self, plaintext, recipient_pubkey_pem):
-        """Szyfruje treść kluczem wyliczonym przez ECDH."""
         shared_key = self.get_shared_key(recipient_pubkey_pem)
         if not shared_key:
             return "🔒 [Błąd szyfrowania E2EE (brak klucza)]"
@@ -149,7 +139,6 @@ class NetworkManager:
             return f"🔒 [Błąd szyfrowania E2EE: {e}]"
 
     def decrypt_e2ee(self, ciphertext, sender_pubkey_pem):
-        """Odszyfrowuje treść kluczem wyliczonym przez ECDH."""
         shared_key = self.get_shared_key(sender_pubkey_pem)
         if not shared_key:
             return "🔒 [Błąd deszyfrowania E2EE (brak klucza)]"

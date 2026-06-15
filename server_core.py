@@ -15,16 +15,9 @@ class ChatServer:
         self.log = log_callback
         self.is_running = False
         self.server_socket = None
-
-        # Słownik aktywnych połączeń {username: połączenie}
         self.active_users = {}
-
-        # Inicjalizacja zabezpieczeń i bazy
         self.cipher = Fernet(CIPHER_KEY)
         database.init_db()
-
-        # --- WZORZEC ROUTERA ---
-        # Zamiast ściany if/elif, oddelegowujemy każdą akcję do oddzielnej metody!
         self.routes = {
             'register': self.handle_register,
             'login': self.handle_login,
@@ -46,7 +39,6 @@ class ChatServer:
             'update_public_key': self.handle_update_public_key
         }
 
-    # --- ZARZĄDZANIE SERWEREM ---
     def start(self, ip, port):
         try:
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -58,7 +50,7 @@ class ChatServer:
             threading.Thread(target=self._accept_loop, daemon=True).start()
             return True
         except Exception as e:
-            self.log(f"Błąd uruchamiania: {e}")
+            self.log(f"Błąd uruchamiania serwera: {e}")
             return False
 
     def stop(self):
@@ -66,12 +58,12 @@ class ChatServer:
         if self.server_socket:
             try:
                 self.server_socket.close()
-            except:
+            except Exception:
                 pass
         for conn in list(self.active_users.values()):
             try:
                 conn.close()
-            except:
+            except Exception:
                 pass
         self.active_users.clear()
 
@@ -83,14 +75,13 @@ class ChatServer:
             except OSError:
                 break
 
-    # --- POMOCNICZE METODY SIECIOWE ---
     def encrypt_sys(self, text):
         return self.cipher.encrypt(text.encode('utf-8')).decode('utf-8')
 
     def send_to(self, conn, packet):
         try:
             conn.sendall((json.dumps(packet) + "\n").encode('utf-8'))
-        except:
+        except Exception:
             pass
 
     def broadcast(self, packet, exclude=None):
@@ -99,7 +90,7 @@ class ChatServer:
             if username != exclude:
                 try:
                     conn.sendall(json_data)
-                except:
+                except Exception:
                     pass
 
     def broadcast_user_list(self):
@@ -111,7 +102,6 @@ class ChatServer:
         }
         self.broadcast(packet)
 
-    # --- GŁÓWNA PĘTLA KLIENTA ---
     def _handle_client(self, conn, addr):
         self.log(f"[POŁĄCZENIE] Nowy klient {addr}")
         current_user = None
@@ -119,15 +109,15 @@ class ChatServer:
 
         try:
             for line in file_obj:
-                if not line.strip(): continue
+                if not line.strip():
+                    continue
                 message = json.loads(line)
                 action = message.get('action')
 
-                # Użycie Routera - wykonanie odpowiedniej metody z dict'a
                 if action in self.routes:
                     result = self.routes[action](conn, message, current_user)
-                    # Jeśli metoda zwróciła nową nazwę użytkownika (np. po logowaniu), zapisz ją
-                    if result: current_user = result
+                    if result:
+                        current_user = result
         except Exception as e:
             self.log(f"[BŁĄD] {addr}: {e}")
         finally:
@@ -141,9 +131,6 @@ class ChatServer:
             conn.close()
             self.log(f"[ROZŁĄCZONO] Klient {addr} opuścił serwer.")
 
-    # ==========================================
-    # --- ROUTY (HANDLERY POSZCZEGÓLNYCH AKCJI)
-    # ==========================================
     def handle_register(self, conn, msg, current_user):
         user, pwd = msg.get('username'), msg.get('password')
         if database.register_user(user, pwd):
@@ -168,7 +155,6 @@ class ChatServer:
                 self.broadcast({"action": "chat_message", "sender": "SYSTEM", "content": sys_msg, "timestamp": now},
                                exclude=user)
 
-                # Wysyłanie historii do klienta
                 self.send_to(conn, {"action": "chat_history", "history": database.get_global_history()})
                 self.send_to(conn, {"action": "private_history", "history": database.get_private_history(user)})
 
@@ -184,12 +170,13 @@ class ChatServer:
                     self.send_to(conn, {"action": "pending_requests", "invites": invites, "join_reqs": join_reqs})
 
                 self.log(f"[LOGOWANIE] Zalogowano: {user}")
-                return user  # Zwracamy nową tożsamość dla pętli
+                return user
         else:
             self.send_to(conn, {"status": "error", "message": "Błędny login lub hasło."})
 
     def handle_update_public_key(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         pub_key = msg.get("public_key")
         if pub_key:
             database.update_user_public_key(current_user, pub_key)
@@ -197,7 +184,8 @@ class ChatServer:
             self.broadcast_user_list()
 
     def handle_typing(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         target = msg.get("target")
         packet = {"action": "typing", "sender": current_user, "target": target}
 
@@ -211,7 +199,8 @@ class ChatServer:
             self.send_to(self.active_users[target], packet)
 
     def handle_broadcast_message(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         content = msg.get('content')
         database.save_message(current_user, "Globalny", content)
 
@@ -223,7 +212,8 @@ class ChatServer:
         }, exclude=current_user)
 
     def handle_private_message(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         recipient, content = msg.get("recipient"), msg.get("content")
         database.save_message(current_user, recipient, content)
         if recipient in self.active_users:
@@ -232,7 +222,8 @@ class ChatServer:
                           "timestamp": datetime.now().strftime("%H:%M")})
 
     def handle_group_message(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         group, content = msg.get("group"), msg.get("content")
         database.save_message(current_user, group, content)
         packet = {"action": "group_message", "sender": current_user, "group": group, "content": content,
@@ -242,7 +233,8 @@ class ChatServer:
                 self.send_to(self.active_users[m], packet)
 
     def handle_send_file(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         target, filename, file_id, file_data = msg.get("target"), msg.get("filename"), msg.get("file_id"), msg.get(
             "data")
 
@@ -257,20 +249,25 @@ class ChatServer:
         packet = {
             "action": "chat_message" if target == "Globalny" else (
                 "group_message" if target.startswith("#") else "private_message"),
-            "sender": current_user, "content": enc_info, "timestamp": datetime.now().strftime("%H:%M")
+            "sender": current_user,
+            "content": enc_info,
+            "timestamp": datetime.now().strftime("%H:%M")
         }
-        if target.startswith("#"): packet["group"] = target
+        if target.startswith("#"):
+            packet["group"] = target
 
         if target == "Globalny":
             self.broadcast(packet, exclude=current_user)
         elif target.startswith("#"):
             for m in database.get_group_members(target):
-                if m in self.active_users and m != current_user: self.send_to(self.active_users[m], packet)
+                if m in self.active_users and m != current_user:
+                    self.send_to(self.active_users[m], packet)
         elif target in self.active_users:
             self.send_to(self.active_users[target], packet)
 
     def handle_download_request(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         file_id, filename = msg.get("file_id"), msg.get("filename")
         path = os.path.join("Serwer_Pliki", file_id)
         if os.path.exists(path):
@@ -281,7 +278,8 @@ class ChatServer:
             self.send_to(conn, {"status": "error", "message": "Plik został usunięty z serwera."})
 
     def handle_create_group(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         name = msg.get("name")
         if database.create_group(name, current_user):
             self.send_to(conn, {"status": "success", "message": f"Utworzono {name}!"})
@@ -291,7 +289,8 @@ class ChatServer:
             self.send_to(conn, {"status": "error", "message": "Taka grupa już istnieje!"})
 
     def handle_join_group(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         name = msg.get("name")
         creator = database.get_group_creator(name)
         if not creator:
@@ -306,7 +305,8 @@ class ChatServer:
                              {"action": "join_request_received", "group": name, "user": current_user})
 
     def handle_add_user_to_group(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         group, user_to_add = msg.get("group"), msg.get("user")
         if database.get_group_creator(group) == current_user:
             if user_to_add not in database.get_all_users():
@@ -323,7 +323,8 @@ class ChatServer:
             self.send_to(conn, {"status": "error", "message": "Tylko założyciel może zapraszać!"})
 
     def handle_resolve_join(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         group, user, accept = msg.get("group"), msg.get("user"), msg.get("accept")
         database.remove_group_request(group, user, "join")
 
@@ -353,7 +354,8 @@ class ChatServer:
                              {"status": "error", "message": f"Prośba o dołączenie do {group} ODRZUCONA."})
 
     def handle_resolve_invite(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         group, accept = msg.get("group"), msg.get("accept")
         database.remove_group_request(group, current_user, "invite")
         creator = database.get_group_creator(group)
@@ -381,7 +383,8 @@ class ChatServer:
                              {"status": "error", "message": f"{current_user} ODRZUCIŁ zaproszenie do {group}."})
 
     def handle_leave_group(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         group = msg.get("name")
         database.leave_group(group, current_user)
         self.send_to(conn, {"status": "success", "message": f"Opuszczono {group}."})
@@ -399,7 +402,8 @@ class ChatServer:
                               "creator": database.get_group_creator(group)})
 
     def handle_kick_user(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         group, user_to_kick = msg.get("group"), msg.get("user")
         creator = database.get_group_creator(group)
         if creator == current_user:
@@ -424,13 +428,15 @@ class ChatServer:
                                  {"action": "group_info", "group": group, "members": members, "creator": creator})
 
     def handle_get_group_info(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         group = msg.get("group")
         self.send_to(conn, {"action": "group_info", "group": group, "members": database.get_group_members(group),
                             "creator": database.get_group_creator(group)})
 
     def handle_delete_group(self, conn, msg, current_user):
-        if not current_user: return
+        if not current_user:
+            return
         group = msg.get("group")
         members = database.get_group_members(group)
         if database.delete_group(group, current_user):

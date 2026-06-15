@@ -5,106 +5,58 @@ import hashlib
 def init_db():
     conn = sqlite3.connect('chat.db')
     cursor = conn.cursor()
+    
+    # Tabela użytkowników
     cursor.execute('''
-                   CREATE TABLE IF NOT EXISTS users
-                   (
-                       id
-                       INTEGER
-                       PRIMARY
-                       KEY
-                       AUTOINCREMENT,
-                       username
-                       TEXT
-                       UNIQUE
-                       NOT
-                       NULL,
-                       password_hash
-                       TEXT
-                       NOT
-                       NULL
-                   )
-                   ''')
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL
+        )
+    ''')
+    
+    # Tabela wiadomości
     cursor.execute('''
-                   CREATE TABLE IF NOT EXISTS messages
-                   (
-                       id
-                       INTEGER
-                       PRIMARY
-                       KEY
-                       AUTOINCREMENT,
-                       sender
-                       TEXT
-                       NOT
-                       NULL,
-                       recipient
-                       TEXT
-                       NOT
-                       NULL,
-                       content
-                       TEXT
-                       NOT
-                       NULL,
-                       timestamp
-                       DATETIME
-                       DEFAULT
-                       CURRENT_TIMESTAMP
-                   )
-                   ''')
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender TEXT NOT NULL,
+            recipient TEXT NOT NULL,
+            content TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Tabela grup
     cursor.execute('''
-                   CREATE TABLE IF NOT EXISTS groups
-                   (
-                       id
-                       INTEGER
-                       PRIMARY
-                       KEY
-                       AUTOINCREMENT,
-                       name
-                       TEXT
-                       UNIQUE
-                       NOT
-                       NULL
-                   )
-                   ''')
+        CREATE TABLE IF NOT EXISTS groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
+        )
+    ''')
+    
+    # Tabela członków grup
     cursor.execute('''
-                   CREATE TABLE IF NOT EXISTS group_members
-                   (
-                       group_name
-                       TEXT
-                       NOT
-                       NULL,
-                       username
-                       TEXT
-                       NOT
-                       NULL
-                   )
-                   ''')
+        CREATE TABLE IF NOT EXISTS group_members (
+            group_name TEXT NOT NULL,
+            username TEXT NOT NULL
+        )
+    ''')
+    
+    # Tabela oczekujących zaproszeń / prośb o dołączenie
     cursor.execute('''
-                   CREATE TABLE IF NOT EXISTS group_requests
-                   (
-                       group_name
-                       TEXT
-                       NOT
-                       NULL,
-                       username
-                       TEXT
-                       NOT
-                       NULL,
-                       request_type
-                       TEXT
-                       NOT
-                       NULL,
-                       UNIQUE
-                   (
-                       group_name,
-                       username,
-                       request_type
-                   )
-                       )
-                    ''')
+        CREATE TABLE IF NOT EXISTS group_requests (
+            group_name TEXT NOT NULL,
+            username TEXT NOT NULL,
+            request_type TEXT NOT NULL,
+            UNIQUE(group_name, username, request_type)
+        )
+    ''')
+
     try:
         cursor.execute('ALTER TABLE users ADD COLUMN public_key TEXT DEFAULT NULL')
     except sqlite3.OperationalError:
         pass
+        
     conn.commit()
     conn.close()
 
@@ -186,11 +138,11 @@ def get_private_history(username, limit=100):
     conn = sqlite3.connect('chat.db')
     cursor = conn.cursor()
     cursor.execute('''
-                   SELECT sender, recipient, content, strftime("%H:%M", timestamp, "localtime")
-                   FROM messages
-                   WHERE recipient != "Globalny" AND recipient NOT LIKE "#%" AND (sender = ? OR recipient = ?)
-                   ORDER BY id DESC LIMIT ?
-                   ''', (username, username, limit))
+        SELECT sender, recipient, content, strftime("%H:%M", timestamp, "localtime")
+        FROM messages
+        WHERE recipient != "Globalny" AND recipient NOT LIKE "#%" AND (sender = ? OR recipient = ?)
+        ORDER BY id DESC LIMIT ?
+    ''', (username, username, limit))
     rows = cursor.fetchall()
     conn.close()
     return [{"sender": row[0], "recipient": row[1], "content": row[2], "timestamp": row[3]} for row in reversed(rows)]
@@ -200,11 +152,10 @@ def create_group(name, creator):
     conn = sqlite3.connect('chat.db')
     cursor = conn.cursor()
 
-    # NOWOŚĆ: Sprawdzamy czy taka nazwa już istnieje w bazie (ignorując wielkość liter - LOWER)
     cursor.execute('SELECT name FROM groups WHERE LOWER(name) = LOWER(?)', (name,))
     if cursor.fetchone():
         conn.close()
-        return False  # Grupa już istnieje (nawet jeśli ktoś wpisał ją z innej wielkości liter)
+        return False
 
     try:
         cursor.execute('INSERT INTO groups (name) VALUES (?)', (name,))

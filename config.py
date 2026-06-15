@@ -1,9 +1,8 @@
 import os
 
-# --- KLUCZE I ZABEZPIECZENIA ---
 CIPHER_KEY = b'MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE='
 
-# --- PALETA KOLORÓW ---
+# --- Konfiguracja palety kolorów interfejsu ---
 C_NOTIFICATION_BG = "#2B2D31"
 C_BG_LEFT = "#1E1F22"
 C_BG_MID = "#2B2D31"
@@ -17,7 +16,7 @@ C_TEXT_MUTED = "#949BA4"
 C_HOVER = "#3F4147"
 C_ONLINE = "#23A559"
 
-# --- BAZA EMOTEK ---
+# --- Baza emotikon ---
 EMOTES_DB = {
     ":pepe:": "https://cdn.frankerfacez.com/emoticon/28087/1",
     ":pog:": "https://cdn.frankerfacez.com/emoticon/210748/1",
@@ -28,6 +27,6 @@ EMOTES_DB = {
     ":ez:": "https://cdn.frankerfacez.com/emoticon/108566/1"
 }
 
-# --- SYSTEM PLIKÓW ---
+# --- Inicjalizacja katalogów pamięci podręcznej ---
 os.makedirs("Cache_Obrazki", exist_ok=True)
 os.makedirs("Cache_Emotki", exist_ok=True)

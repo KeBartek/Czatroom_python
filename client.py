@@ -10,8 +10,21 @@ import colorsys
 from tkinter import messagebox, filedialog
 from datetime import datetime
 
-# Importy z naszych nowych modułów!
-from config import *
+from config import (
+    C_BG_LEFT,
+    C_BG_MID,
+    C_BG_RIGHT,
+    C_CHAT_BOX,
+    C_INPUT_BG,
+    C_PRIMARY,
+    C_PRIMARY_HOVER,
+    C_TEXT_MAIN,
+    C_TEXT_MUTED,
+    C_HOVER,
+    C_ONLINE,
+    C_NOTIFICATION_BG,
+    EMOTES_DB,
+)
 from network import NetworkManager
 
 try:
@@ -51,15 +64,13 @@ class ChatClient:
         self.emote_panel_visible = False
         self.image_labels = {}
 
-        # ----------------------------------------------------
-        # INCJALIZACJA NASZEGO NOWEGO MENEDŻERA SIECIOWEGO
-        # ----------------------------------------------------
+        # Inicjalizacja menedżera sieciowego
         self.net = NetworkManager(
             on_message_callback=self.handle_server_message,
             on_disconnect_callback=self.handle_disconnect
         )
 
-        # Wczytywanie profesjonalnych ikon (Jeśli folder icons istnieje)
+        # Wczytanie ikon
         self.icon_globe = self.load_icon("globe.png")
         self.icon_add = self.load_icon("ADD.png")
         self.icon_join = self.load_icon("join.png")
@@ -86,24 +97,29 @@ class ChatClient:
                 try:
                     response = requests.get(url, timeout=3)
                     if response.status_code == 200:
-                        with open(filepath, "wb") as f: f.write(response.content)
-                except:
+                        with open(filepath, "wb") as f:
+                            f.write(response.content)
+                except Exception:
                     pass
 
     def get_emote_image(self, emote_code):
-        if emote_code not in EMOTES_DB: return None
-        if emote_code in self.loaded_emotes: return self.loaded_emotes[emote_code]
+        if emote_code not in EMOTES_DB:
+            return None
+        if emote_code in self.loaded_emotes:
+            return self.loaded_emotes[emote_code]
 
         filepath = os.path.join("Cache_Emotki", f"{emote_code.strip(':')}.png")
-        if not os.path.exists(filepath): return None
+        if not os.path.exists(filepath):
+            return None
         try:
             img = ctk.CTkImage(Image.open(filepath), size=(24, 24))
             self.loaded_emotes[emote_code] = img
             return img
-        except:
+        except Exception:
             return None
 
-    # --- UI: EKRANY LOGOWANIA ---
+    # --- UI: Widoki logowania i połączenia ---
+
     def build_connect_screen(self):
         self.frame = ctk.CTkFrame(master=self.root, corner_radius=15, fg_color=C_CHAT_BOX)
         self.frame.pack(pady=40, padx=50, fill="both", expand=True)
@@ -183,9 +199,9 @@ class ChatClient:
             messagebox.showwarning("Uwaga", "Wprowadź nazwę użytkownika i hasło.")
             return
 
-        if not self.connect_to_server(): return
+        if not self.connect_to_server():
+            return
 
-        # Wykorzystujemy nowy NetworkManager do logowania!
         response = self.net.auth_request(action, username, password)
 
         if response['status'] == 'success':
@@ -205,7 +221,8 @@ class ChatClient:
     def register(self):
         self.send_auth_request("register")
 
-    # --- UI: GŁÓWNY INTERFEJS CZATU ---
+    # --- UI: Główny interfejs aplikacji  ---
+
     def open_chat_window(self):
         self.frame.destroy()
         self.root.geometry("1200x750")
@@ -266,7 +283,7 @@ class ChatClient:
                                              hover_color=C_HOVER, command=self.ui_leave_group)
         self.btn_leave_group.pack(fill="x", pady=2)
 
-        # 2. ŚRODKOWY PANEL (Czat)
+        # 2. ŚRODKOWY PANEL
         self.chat_area = ctk.CTkFrame(self.main_container, fg_color=C_BG_MID, corner_radius=0)
         self.chat_area.grid(row=0, column=1, sticky="nsew")
         self.chat_area.grid_rowconfigure(1, weight=1)
@@ -291,7 +308,7 @@ class ChatClient:
         self.text_area.tag_bind("link", "<Leave>", lambda _: self.text_area.configure(cursor=""))
         self.text_area.tag_bind("link", "<Button-1>", self.click_link)
 
-        # Markdown Formatting Tags
+        # Znaczniki formatowania Markdown
         self.text_area._textbox.tag_config("bold", font=("Consolas", 14, "bold"))
         self.text_area._textbox.tag_config("italic", font=("Consolas", 14, "italic"))
         self.text_area._textbox.tag_config("strikethrough", overstrike=True)
@@ -322,7 +339,7 @@ class ChatClient:
         self.entry_message.bind("<KeyRelease>", self.auto_resize_input)
         self.entry_message.bind("<Return>", self.handle_return)
 
-        # 3. PRAWY PANEL (Użytkownicy)
+        # 3. PRAWY PANEL
         self.right_sidebar = ctk.CTkFrame(self.main_container, width=250, corner_radius=0, fg_color=C_BG_RIGHT)
         self.right_sidebar.grid(row=0, column=2, sticky="ns")
         self.right_sidebar.grid_columnconfigure(0, weight=1)
@@ -348,14 +365,13 @@ class ChatClient:
         self.notification_label = ctk.CTkLabel(self.notification_frame, text="", font=("Roboto", 13), wraplength=200)
         self.notification_label.pack(padx=20, pady=15)
 
-        # Rozpoczęcie nasłuchiwania przez nowy moduł sieciowy
         self.net.start_listening()
 
     def handle_disconnect(self):
-        """Wywoływane, gdy NetworkManager straci połączenie z serwerem."""
         self.root.after(0, lambda: messagebox.showerror("Błąd krytyczny", "Utracono połączenie z serwerem."))
 
-    # --- LOGIKA UI ---
+    # --- UI: Metody pomocnicze interfejsu ---
+
     def toggle_emote_panel(self):
         if self.emote_panel is None:
             self.emote_panel = ctk.CTkScrollableFrame(master=self.chat_area, height=60, orientation="horizontal",
@@ -369,7 +385,8 @@ class ChatClient:
             self.populate_emote_panel()
 
     def populate_emote_panel(self):
-        for widget in self.emote_panel.winfo_children(): widget.destroy()
+        for widget in self.emote_panel.winfo_children():
+            widget.destroy()
         for code in EMOTES_DB.keys():
             img = self.get_emote_image(code)
             if img:
@@ -387,7 +404,8 @@ class ChatClient:
 
     def show_typing_indicator(self, sender):
         self.lbl_typing.configure(text=f"{sender} pisze...")
-        if self.typing_timer: self.root.after_cancel(self.typing_timer)
+        if self.typing_timer:
+            self.root.after_cancel(self.typing_timer)
         self.typing_timer = self.root.after(3000, self.clear_typing_indicator)
 
     def clear_typing_indicator(self):
@@ -399,7 +417,8 @@ class ChatClient:
             self.btn_global_chat.configure(text_color="white" if unread_gl > 0 else C_TEXT_MAIN,
                                            text=f" Czat Globalny ({unread_gl})" if unread_gl > 0 else " Czat Globalny")
 
-            for widget in self.groups_scrollable.winfo_children(): widget.destroy()
+            for widget in self.groups_scrollable.winfo_children():
+                widget.destroy()
             private_chats = [c for c in self.chat_histories.keys() if c != "Globalny" and not c.startswith("#")]
 
             for group in self.cached_groups:
@@ -420,7 +439,8 @@ class ChatClient:
                 lbl.bind("<Button-1>", lambda event, p=priv: self.switch_chat(p))
                 lbl.pack(fill="x", pady=2, padx=10)
 
-            for widget in self.users_scrollable.winfo_children(): widget.destroy()
+            for widget in self.users_scrollable.winfo_children():
+                widget.destroy()
 
             if self.current_chat.startswith("#"):
                 self.lbl_right_title.configure(text="Członkowie Grupy")
@@ -461,7 +481,8 @@ class ChatClient:
                              text_color="white", anchor="w").pack(fill="x", pady=4, padx=5)
 
                 for user in self.cached_all_users:
-                    if user == self.username: continue
+                    if user == self.username:
+                        continue
                     status = "🟢" if user in self.cached_online_users else "⚪"
                     unread = self.unread_counts.get(user, 0)
                     u_color = "white" if unread > 0 else C_TEXT_MUTED
@@ -477,7 +498,8 @@ class ChatClient:
 
         self.root.after(0, refresh)
 
-    # --- AKCJE UI: ZARZĄDZANIE GRUPAMI ---
+    # --- UI: Metody zarządzania grupami dyskusyjnymi ---
+
     def handle_join_request(self, group, user):
         ans = messagebox.askyesno("Prośba o dołączenie",
                                   f"'{user}' prosi o dołączenie do '{group}'.\n\nCzy akceptujesz?")
@@ -526,15 +548,18 @@ class ChatClient:
         if messagebox.askyesno("Usuń grupę", f"UWAGA! Usunąć {self.current_chat}? Tej akcji nie można cofnąć!"):
             self.net.send({"action": "delete_group", "group": self.current_chat})
 
-    # --- LOGIKA PRZETWARZANIA TEKSTU I HISTORII ---
+    # ---  formatowanie wiadomości i renderowanie tekstu ---
+
     def switch_chat(self, chat_name):
         self.current_chat = chat_name
         self.lbl_current_chat.configure(
             text=f"{'# ' if chat_name.startswith('#') else ''}Rozmowa: {chat_name.replace('#', '')}")
         self.clear_typing_indicator()
 
-        if self.emote_panel_visible: self.toggle_emote_panel()
-        if chat_name in self.unread_counts: self.unread_counts[chat_name] = 0
+        if self.emote_panel_visible:
+            self.toggle_emote_panel()
+        if chat_name in self.unread_counts:
+            self.unread_counts[chat_name] = 0
 
         if chat_name.startswith("#"):
             self.net.send({"action": "get_group_info", "group": chat_name})
@@ -547,7 +572,8 @@ class ChatClient:
 
         history_text = self.chat_histories.get(chat_name, "")
         for line in history_text.split("\n"):
-            if line: self.insert_line_with_buttons(line)
+            if line:
+                self.insert_line_with_buttons(line)
 
         self.text_area.configure(state="disabled")
         self.text_area.see("end")
@@ -556,8 +582,8 @@ class ChatClient:
         self._insert_markdown_text(text, tag)
 
     def _insert_markdown_text(self, text, tag=None):
-        """Parsuje i wstawia tekst z obsługą pogrubienia (**bold** / *bold*), kursywy (_italic_), 
-        przekreślenia (~strikethrough~) oraz kodu w linii (`code`)."""
+        """pogrubienie (**bold** / *bold*), kursywa (_italic_),
+        przekreślenie (~strikethrough~) oraz kodu w linii (`code`)."""
         pattern = r'(`[^`\n]+`|\*\*[^*]+?\*\*|\*[^*]+?\*|_[^_]+?_|~[^~]+?~)'
         parts = re.split(pattern, text)
         
@@ -603,7 +629,8 @@ class ChatClient:
             before_text = segment[:match.start()]
             after_text = segment[match.end():]
 
-            if before_text: self._insert_text_with_emotes(before_text)
+            if before_text:
+                self._insert_text_with_emotes(before_text)
 
             is_image = filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
 
@@ -618,11 +645,13 @@ class ChatClient:
                     else:
                         self.text_area.insert("end", f"[Uszkodzony obraz: {filename}]")
                 else:
-                    lbl = ctk.CTkLabel(self.text_area._textbox, text=f"🖼️ Ładowanie...", fg_color=C_INPUT_BG,
+                    lbl = ctk.CTkLabel(self.text_area._textbox, text="🖼️ Ładowanie...", fg_color=C_INPUT_BG,
                                        corner_radius=8, padx=10, pady=5)
                     self.text_area._textbox.window_create("end", window=lbl)
-                    if not hasattr(self, 'image_labels'): self.image_labels = {}
-                    if filename not in self.image_labels: self.image_labels[filename] = []
+                    if not hasattr(self, 'image_labels'):
+                        self.image_labels = {}
+                    if filename not in self.image_labels:
+                        self.image_labels[filename] = []
                     self.image_labels[filename].append(lbl)
 
                     self.request_download(file_id, filename)
@@ -651,7 +680,7 @@ class ChatClient:
                 return
 
             if sender == getattr(self, 'last_rendered_sender', None):
-                indent_length = len(time_str) + 1 + len(sender) + 2 + 5  # +5 na wcięcie avataru i spacji
+                indent_length = len(time_str) + 1 + len(sender) + 2 + 4
                 self.text_area.insert("end", " " * indent_length)
             else:
                 self.last_rendered_sender = sender
@@ -667,7 +696,6 @@ class ChatClient:
 
                 self.text_area.insert("end", time_str + " ", "time")
                 
-                # Dynamiczny avatar nadawcy
                 avatar_img = self.get_user_avatar(sender)
                 if avatar_img:
                     lbl = ctk.CTkLabel(self.text_area._textbox, text="", image=avatar_img, bg_color=C_CHAT_BOX)
@@ -675,14 +703,13 @@ class ChatClient:
                         lbl.configure(cursor="hand2")
                         lbl.bind("<Button-1>", lambda event, s=sender: self.switch_chat(s))
                     self.text_area._textbox.window_create("end", window=lbl)
-                    self.text_area.insert("end", " ")  # Odstęp po avatarze
+                    self.text_area.insert("end", " ")
                 
                 self.text_area.insert("end", sender + ": ", tag_name)
         else:
             self.last_rendered_sender = None
             rest_of_line = line
 
-        # Skanowanie i renderowanie bloków kodu
         code_parts = re.split(r'(```.*?```)', rest_of_line, flags=re.DOTALL)
         for part in code_parts:
             if part.startswith('```') and part.endswith('```'):
@@ -701,8 +728,6 @@ class ChatClient:
                 num_lines = len(code_content.split('\n'))
                 
                 import tkinter as tk
-                # Standardowy tk.Text nie posiada pętli pozycjonowania scrollbarów w tle,
-                # co eliminuje błędy TclError przy czyszczeniu okna czatu.
                 code_box = tk.Text(container, bg="#1E1F22", fg="#ABB2BF", insertbackground="white",
                                    font=("Consolas", 11), bd=0, highlightthickness=0, wrap="word", height=min(num_lines, 12))
                 code_box.insert("1.0", code_content)
@@ -714,14 +739,16 @@ class ChatClient:
             else:
                 self._render_text_segment_with_files(part)
         
-        # Wstawienie nowej linii na końcu całej wiadomości, aby oddzielić od kolejnych
         self.text_area.insert("end", "\n")
 
     def append_to_history(self, chat_name, text):
-        if chat_name not in self.chat_histories: self.chat_histories[chat_name] = ""
+        if chat_name not in self.chat_histories:
+            self.chat_histories[chat_name] = ""
         self.chat_histories[chat_name] += text + "\n"
-        if chat_name != "Globalny" and not chat_name.startswith("#"): self.refresh_ui()
-        if self.current_chat == chat_name: self.display_message(text)
+        if chat_name != "Globalny" and not chat_name.startswith("#"):
+            self.refresh_ui()
+        if self.current_chat == chat_name:
+            self.display_message(text)
 
     def display_message(self, text):
         self.text_area.configure(state="normal")
@@ -733,10 +760,12 @@ class ChatClient:
         self.text_area.see("end")
         self.animate_highlight(start_color="#4E5058")
 
-    # --- LOGIKA WYSYŁANIA ---
+    # --- Metody obsługi wysyłania wiadomości i plików do 5 MB ---
+
     def send_file(self):
         filepath = filedialog.askopenfilename(title="Wybierz plik do wysłania")
-        if not filepath: return
+        if not filepath:
+            return
         if os.path.getsize(filepath) > 5 * 1024 * 1024:
             messagebox.showwarning("Za duży plik", "Maksymalny rozmiar to 5MB.")
             return
@@ -779,7 +808,7 @@ class ChatClient:
                 encrypted_text = self.net.encrypt(msg_text)
                 request = {"action": "group_message", "group": self.current_chat, "content": encrypted_text}
             else:
-                # Rozmowa prywatna: E2EE za pomocą ECDH
+                # E2EE
                 recipient_pubkey = self.user_public_keys.get(self.current_chat)
                 if recipient_pubkey:
                     encrypted_text = self.net.encrypt_e2ee(msg_text, recipient_pubkey)
@@ -788,7 +817,8 @@ class ChatClient:
                 request = {"action": "private_message", "recipient": self.current_chat, "content": encrypted_text}
 
             self.append_to_history(self.current_chat, f"[{now}] {self.username}: {msg_text}")
-            if self.emote_panel_visible: self.toggle_emote_panel()
+            if self.emote_panel_visible:
+                self.toggle_emote_panel()
 
             try:
                 self.net.send(request)
@@ -811,9 +841,9 @@ class ChatClient:
                 target=lambda: notification.notify(title=title, message=msg, app_name="Czatroom", timeout=5),
                 daemon=True).start()
 
-    # --- NOWOŚĆ: JEDNA FUNKCJA ODBIERAJĄCA Z SIECI ---
+    # --- Obsługa komunikatów sieciowych serwera ---
+
     def handle_server_message(self, message):
-        """Obsługuje rozszyfrowane JSON-y przychodzące z wątku sieciowego."""
         action = message.get("action")
 
         if action == "chat_message":
@@ -822,6 +852,10 @@ class ChatClient:
             time_str = message.get("timestamp", "")
             self.append_to_history("Globalny", f"[{time_str}] {sender}: {content}")
             if sender != self.username and sender != "SYSTEM":
+                preview = content[:100] + "..." if len(content) > 100 else content
+                if "[FILE:" in content:
+                    preview = "Wysłano plik"
+                self.show_notification(f"Czat Globalny ({sender})", preview)
                 self.mark_unread("Globalny")
                 self.play_notification_sound()
                 self.root.after(0, self.clear_typing_indicator)
@@ -837,7 +871,8 @@ class ChatClient:
             self.append_to_history(sender, f"[{time_str}] {sender}: {content}")
             if sender != self.username:
                 preview = content[:100] + "..." if len(content) > 100 else content
-                if "[FILE:" in content: preview = "Wysłano plik"
+                if "[FILE:" in content:
+                    preview = "Wysłano plik"
                 self.show_notification(f"Wiadomość od: {sender}", preview)
                 self.mark_unread(sender)
                 self.play_notification_sound()
@@ -851,7 +886,8 @@ class ChatClient:
             self.append_to_history(group, f"[{time_str}] {sender}: {content}")
             if sender != self.username:
                 preview = content[:100] + "..." if len(content) > 100 else content
-                if "[FILE:" in content: preview = "Wysłano plik"
+                if "[FILE:" in content:
+                    preview = "Wysłano plik"
                 self.show_notification(f"Grupa {group} ({sender})", preview)
                 self.mark_unread(group)
                 self.play_notification_sound()
@@ -883,7 +919,8 @@ class ChatClient:
                 save_path = filedialog.asksaveasfilename(initialfile=filename, title="Zapisz jako...",
                                                          defaultextension=ext, filetypes=filetypes_config)
                 if save_path:
-                    if ext and not save_path.lower().endswith(ext.lower()): save_path += ext
+                    if ext and not save_path.lower().endswith(ext.lower()):
+                        save_path += ext
                     try:
                         with open(save_path, "wb") as f:
                             f.write(base64.b64decode(file_data))
@@ -910,11 +947,13 @@ class ChatClient:
         elif action == "kicked_from_group":
             messagebox.showwarning("Wyrzucono z grupy",
                                    f"Zostałeś wyrzucony z grupy {message.get('group')} przez administratora.")
-            if self.current_chat == message.get("group"): self.switch_chat("Globalny")
+            if self.current_chat == message.get("group"):
+                self.switch_chat("Globalny")
 
         elif action == "group_deleted":
             messagebox.showinfo("Grupa usunięta", f"Właściciel usunął grupę {message.get('group')}.")
-            if self.current_chat == message.get("group"): self.switch_chat("Globalny")
+            if self.current_chat == message.get("group"):
+                self.switch_chat("Globalny")
 
         elif action == "chat_history":
             for msg in message.get("history", []):
@@ -945,9 +984,10 @@ class ChatClient:
             self.root.after(0, self.handle_invite, message.get("group"), message.get("admin", "Właściciela"))
 
         elif action == "pending_requests":
-            for inv in message.get("invites", []): self.root.after(0, self.handle_invite, inv, "Właściciela")
-            for req in message.get("join_reqs", []): self.root.after(0, self.handle_join_request, req['group'],
-                                                                     req['user'])
+            for inv in message.get("invites", []):
+                self.root.after(0, self.handle_invite, inv, "Właściciela")
+            for req in message.get("join_reqs", []):
+                self.root.after(0, self.handle_join_request, req['group'], req['user'])
 
         elif "status" in message:
             if message["status"] == "error":
@@ -965,8 +1005,8 @@ class ChatClient:
         tags_ranges = self.text_area._textbox.tag_ranges("link")
         for i in range(0, len(tags_ranges), 2):
             if self.text_area._textbox.compare(tags_ranges[i], "<=", idx) and self.text_area._textbox.compare(idx, "<=",
-                                                                                                              tags_ranges[
-                                                                                                                  i + 1]):
+                                                                                                               tags_ranges[
+                                                                                                                   i + 1]):
                 webbrowser.open(self.text_area._textbox.get(tags_ranges[i], tags_ranges[i + 1]).strip())
                 break
 
@@ -1006,7 +1046,6 @@ class ChatClient:
             label.configure(text="❌ Błąd obrazu")
 
     def get_user_avatar(self, username):
-        """Generuje i zwraca obiekt CTkImage dla avataru użytkownika (z buforowaniem)."""
         if not hasattr(self, 'avatar_cache'):
             self.avatar_cache = {}
         if username in self.avatar_cache:
@@ -1017,55 +1056,94 @@ class ChatClient:
 
         try:
             if not os.path.exists(filepath):
-                # Generowanie nowego avataru w formacie PNG
                 size = 40
-                # Stabilna barwa (hue) na bazie nazwy użytkownika
                 hue = sum(ord(c) for c in username) % 360
                 rgb = colorsys.hsv_to_rgb(hue / 360.0, 0.65, 0.6)
                 bg_color = tuple(int(x * 255) for x in rgb)
 
-                # Przezroczysty obraz
                 img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
                 draw = ImageDraw.Draw(img)
-                # Rysowanie koła
                 draw.ellipse([0, 0, size, size], fill=bg_color)
 
-                # Wyśrodkowany inicjał
                 initial = username[0].upper() if username else "?"
-                try:
-                    font = ImageFont.truetype("arial.ttf", 20)
-                except Exception:
+                
+                font = None
+                font_candidates = [
+                    "arial.ttf",
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+                    "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+                    "/System/Library/Fonts/Supplemental/Arial.ttf",
+                ]
+                for font_path in font_candidates:
+                    try:
+                        font = ImageFont.truetype(font_path, 20)
+                        break
+                    except Exception:
+                        continue
+                
+                if font is None:
                     font = ImageFont.load_default()
 
-                draw.text((size / 2, size / 2), initial, fill="white", anchor="mm", font=font)
+                try:
+                    if hasattr(font, 'getbbox'):
+                        bbox = font.getbbox(initial)
+                        w = bbox[2] - bbox[0]
+                        h = bbox[3] - bbox[1]
+                    elif hasattr(draw, 'textsize'):
+                        w, h = draw.textsize(initial, font=font)
+                    else:
+                        w, h = 10, 10
+                    
+                    x = (size - w) / 2
+                    y = (size - h) / 2 - 2
+                    draw.text((x, y), initial, fill="white", font=font)
+                except Exception:
+                    draw.text((size / 2, size / 2), initial, fill="white", anchor="mm", font=font)
+
                 img.save(filepath, "PNG")
 
-            # Wczytywanie z pliku
             pil_img = Image.open(filepath)
             ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(24, 24))
             self.avatar_cache[username] = ctk_img
             return ctk_img
         except Exception as e:
-            print(f"Błąd generowania avataru dla {username}: {e}")
+            print(f"Błąd generowania awatara dla {username}: {e}")
             return None
 
     def play_notification_sound(self):
-        """Odtwarza dźwięk powiadomienia asynchronicznie. Wspiera własny plik notification.wav."""
         def play():
             try:
-                import winsound
-                if os.path.exists("notification.wav"):
-                    winsound.PlaySound("notification.wav", winsound.SND_FILENAME | winsound.SND_ASYNC)
+                import sys
+                if getattr(sys, 'frozen', False):
+                    base_dir = os.path.dirname(sys.executable)
                 else:
-                    # Domyślny, ładny systemowy dźwięk powiadomienia w Windows
-                    winsound.PlaySound("SystemNotification", winsound.SND_ALIAS | winsound.SND_ASYNC)
+                    base_dir = os.path.dirname(os.path.abspath(__file__))
+                
+                sound_path = os.path.join(base_dir, "notification.wav")
+
+                if sys.platform.startswith("win32"):
+                    import winsound
+                    if os.path.exists(sound_path):
+                        winsound.PlaySound(sound_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                    else:
+                        winsound.PlaySound("SystemNotification", winsound.SND_ALIAS | winsound.SND_ASYNC)
+                else:
+                    if os.path.exists(sound_path):
+                        import subprocess
+                        for cmd in ["paplay", "pw-play", "aplay"]:
+                            try:
+                                subprocess.Popen([cmd, sound_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                break
+                            except FileNotFoundError:
+                                continue
             except Exception as e:
-                print(f"Błąd odtwarzania dźwięku: {e}")
+                print(f"Błąd odtwarzania dźwięku powiadomienia: {e}")
         
         threading.Thread(target=play, daemon=True).start()
 
     def copy_to_clipboard(self, text):
-        """Kopiuje podany tekst do systemowego schowka."""
         try:
             self.root.clipboard_clear()
             self.root.clipboard_append(text)
@@ -1075,7 +1153,6 @@ class ChatClient:
 
     def run(self):
         self.root.mainloop()
-
 
 if __name__ == "__main__":
     app = ChatClient()
