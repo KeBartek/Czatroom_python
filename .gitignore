@@ -1,0 +1,28 @@
+# Baza danych i pliki czatu
+chat.db
+Serwer_Pliki/
+Pobrane_Czat/
+
+# Klucze E2EE (bardzo ważne, aby ich nie udostępniać!)
+keys/
+
+# Pamięć podręczna (Cache) i multimedia
+Cache_Obrazki/
+Cache_Emotki/
+Cache_Avatary/
+
+# Pliki środowiska wirtualnego i konfiguracji edytora
+.venv/
+venv/
+ENV/
+.idea/
+.vscode/
+
+# Kompilacja i budowanie (PyInstaller / Python)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+build/
+dist/
+*.spec

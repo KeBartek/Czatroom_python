@@ -84,7 +84,14 @@ class ChatClient:
 
     def load_icon(self, filename, size=(20, 20)):
         try:
-            img = Image.open(os.path.join("icons", filename))
+            import sys
+            if hasattr(sys, '_MEIPASS'):
+                base_dir = sys._MEIPASS
+            elif getattr(sys, 'frozen', False):
+                base_dir = os.path.dirname(sys.executable)
+            else:
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+            img = Image.open(os.path.join(base_dir, "icons", filename))
             return ctk.CTkImage(light_image=img, dark_image=img, size=size)
         except Exception:
             return None
@@ -1116,7 +1123,9 @@ class ChatClient:
         def play():
             try:
                 import sys
-                if getattr(sys, 'frozen', False):
+                if hasattr(sys, '_MEIPASS'):
+                    base_dir = sys._MEIPASS
+                elif getattr(sys, 'frozen', False):
                     base_dir = os.path.dirname(sys.executable)
                 else:
                     base_dir = os.path.dirname(os.path.abspath(__file__))
